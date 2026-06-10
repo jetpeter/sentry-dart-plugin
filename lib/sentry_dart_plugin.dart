@@ -246,11 +246,6 @@ class SentryDartPlugin {
     return results;
   }
 
-  Future<List<String>> _findAllJsFilePaths() => _collectWebFiles<String>(
-        extension: '.js',
-        builder: (file) => file.path,
-      );
-
   Future<List<File>> _findAllSourceMapFiles() => _collectWebFiles<File>(
         extension: '.js.map',
         builder: (file) => file.absolute,
@@ -260,19 +255,20 @@ class SentryDartPlugin {
     List<String> params = [];
     params.add('sourcemaps');
 
-    // There is currently a sentry-cli bug that mutates the Flutter Web source map
-    // in such a way that it becomes corrupt / invalid -> that's why we need to
-    // inject each file separately instead of using a directory
-    // TODO(buenaflor): in the future we should use the directory when sentry-cli is fixed
-    final jsFilePaths = await _findAllJsFilePaths();
-    if (jsFilePaths.isEmpty) {
+    final fs = injector.get<FileSystem>();
+    final webDir = fs.directory(_configuration.webBuildFilesFolder);
+
+    // Fast-fail if the directory doesn’t exist.
+    if (!await webDir.exists()) {
+      Log.warn(
+        'Web build directory "${_configuration.webBuildFilesFolder}" does not exist, '
+        'skipping inject debug ids.',
+      );
       return false;
     }
 
     params.add('inject');
-    for (final path in jsFilePaths) {
-      params.add(path);
-    }
+    params.add(webDir.path);
 
     params.addAll(_baseCliParams());
 
